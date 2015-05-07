@@ -11,19 +11,19 @@ type Dbm interface {
 	Query(query string, args ...interface{}) (*sql.Rows, error)
 	QueryRow(query string, args ...interface{}) *sql.Row
 
-	TxnBegin() (Dbm, error)
-	TxnCommit() error
-	TxnRollback() error
-	TxnFinish() error
+	TxBegin() (Dbm, error)
+	TxCommit() error
+	TxRollback() error
+	TxFinish() error
 }
 
 type dbm struct {
 	*sql.DB
 }
 
-type txn struct {
+type tx struct {
 	*sql.Tx
-	parent     *txn
+	parent     *tx
 	childCount int
 	isDone     bool
 }
@@ -32,81 +32,82 @@ func NewDbm(db *sql.DB) Dbm {
 	return &dbm{db}
 }
 
-func (dbm *dbm) TxnBegin() (Dbm, error) {
-	t, err := dbm.Begin()
+func (d *dbm) TxBegin() (Dbm, error) {
+	t, err := d.Begin()
 	if err != nil {
 		return nil, err
 	}
-	return &txn{Tx: t}, nil
+	return &tx{Tx: t}, nil
 }
 
-func (dbm *dbm) TxnCommit() error {
+func (d *dbm) TxCommit() error {
 	return sql.ErrTxDone
 }
 
-func (dbm *dbm) TxnRollback() error {
+func (d *dbm) TxRollback() error {
 	return sql.ErrTxDone
 }
 
-func (dbm *dbm) TxnFinish() error {
+func (d *dbm) TxFinish() error {
 	return nil
 }
 
-func (txn *txn) TxnBegin() (Dbm, error) {
-	txn.childCount++
-	return &txn{
-		Tx:     txn.Tx,
-		parent: txn,
-	}, nil
+func (t *tx) TxBegin() (Dbm, error) {
+	t.childCount++
+	child := &tx{
+		Tx:     t.Tx,
+		parent: t,
+	}
+	return child, nil
 }
 
-func (txn *txn) TxnCommit() error {
-	if txn.isDone {
+func (t *tx) TxCommit() error {
+	if t.isDone {
 		return nil
 	}
 
-	if txn.childCount != 0 {
-		txn.TxnRollback()
-		return errors.New("txnmanager: child transactions are not done")
+	if t.childCount != 0 {
+		t.TxRollback()
+		return errors.New("txmanager: child transactions are not done")
 	}
 
-	if txn.parent == nil {
-		err := txn.Commit()
+	if t.parent == nil {
+		err := t.Commit()
 		if err != nil {
-			return txn.TxnRollback()
+			return t.TxRollback()
 		}
-		txn.isDone = true
+		t.isDone = true
 	} else {
-		txn.parent.childCount--
+		t.parent.childCount--
 	}
 	return nil
 }
 
-func (txn *txn) TxnRollback() error {
-	if txn.isDone {
+func (t *tx) TxRollback() error {
+	if t.isDone {
 		return nil
 	}
-	txn.isDone = true
-	return txn.Rollback()
+	t.isDone = true
+	return t.Rollback()
 }
 
-func (txn *txn) TxnFinish() error {
-	if txn.isDone {
+func (t *tx) TxFinish() error {
+	if t.isDone {
 		return nil
 	}
-	return txn.TxnRollback()
+	return t.TxRollback()
 }
 
-func Do(dbm Dbm, f func(txn Dbm) error) error {
-	txn, err := dbm.TxnBegin()
+func Do(d Dbm, f func(t Dbm) error) error {
+	t, err := d.TxBegin()
 	if err != nil {
 		return err
 	}
-	defer txn.TxnFinish()
+	defer t.TxFinish()
 
-	err = f(txn)
+	err = f(t)
 	if err != nil {
 		return err
 	}
-	return txn.TxnCommit()
+	return t.TxCommit()
 }

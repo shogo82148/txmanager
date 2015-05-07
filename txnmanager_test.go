@@ -7,34 +7,43 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-func TestCommit(t *testing.T) {
+func setup() (*sql.DB, error) {
 	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = db.Exec(
+		"CREATE TABLE t1 (id INTEGER PRIMARY KEY)",
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return db, nil
+}
+
+func TestCommit(t *testing.T) {
+	db, err := setup()
 	if err != nil {
 		t.Fatalf("opening database failed: %v", err)
 	}
 	defer db.Close()
 
 	dbm := NewDbm(db)
-	_, err = dbm.Exec(
-		"CREATE TABLE t1 (id INTEGER PRIMARY KEY)",
-	)
-	if err != nil {
-		t.Fatalf("creating test table failed: %v", err)
-	}
-
 	func() {
-		txn, err := dbm.TxnBegin()
+		tx, err := dbm.TxBegin()
 		if err != nil {
 			t.Fatalf("beginning transaction failed: %v", err)
 		}
-		defer txn.TxnFinish()
+		defer tx.TxFinish()
 
-		_, err = txn.Exec("INSERT INTO t1 (id) VALUES(1)")
+		_, err = tx.Exec("INSERT INTO t1 (id) VALUES(1)")
 		if err != nil {
 			t.Fatalf("inserting failed: %v", err)
 		}
 
-		if err := txn.TxnCommit(); err != nil {
+		if err := tx.TxCommit(); err != nil {
 			t.Fatalf("commiting failed: %v", err)
 		}
 	}()
@@ -50,33 +59,26 @@ func TestCommit(t *testing.T) {
 }
 
 func TestRollback(t *testing.T) {
-	db, err := sql.Open("sqlite3", ":memory:")
+	db, err := setup()
 	if err != nil {
 		t.Fatalf("opening database failed: %v", err)
 	}
 	defer db.Close()
 
 	dbm := NewDbm(db)
-	_, err = dbm.Exec(
-		"CREATE TABLE t1 (id INTEGER PRIMARY KEY)",
-	)
-	if err != nil {
-		t.Fatalf("creating test table failed: %v", err)
-	}
-
 	func() {
-		txn, err := dbm.TxnBegin()
+		tx, err := dbm.TxBegin()
 		if err != nil {
 			t.Fatalf("beginning transaction failed: %v", err)
 		}
-		defer txn.TxnFinish()
+		defer tx.TxFinish()
 
-		_, err = txn.Exec("INSERT INTO t1 (id) VALUES(1)")
+		_, err = tx.Exec("INSERT INTO t1 (id) VALUES(1)")
 		if err != nil {
 			t.Fatalf("inserting failed: %v", err)
 		}
 
-		if err := txn.TxnRollback(); err != nil {
+		if err := tx.TxRollback(); err != nil {
 			t.Fatalf("rollback failed: %v", err)
 		}
 	}()
@@ -89,22 +91,15 @@ func TestRollback(t *testing.T) {
 }
 
 func TestDo(t *testing.T) {
-	db, err := sql.Open("sqlite3", ":memory:")
+	db, err := setup()
 	if err != nil {
 		t.Fatalf("opening database failed: %v", err)
 	}
 	defer db.Close()
 
 	dbm := NewDbm(db)
-	_, err = dbm.Exec(
-		"CREATE TABLE t1 (id INTEGER PRIMARY KEY)",
-	)
-	if err != nil {
-		t.Fatalf("creating test table failed: %v", err)
-	}
-
-	err = Do(dbm, func(txn Dbm) error {
-		_, err := txn.Exec("INSERT INTO t1 (id) VALUES(1)")
+	err = Do(dbm, func(tx Dbm) error {
+		_, err := tx.Exec("INSERT INTO t1 (id) VALUES(1)")
 		return err
 	})
 	if err != nil {
