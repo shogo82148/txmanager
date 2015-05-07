@@ -2,6 +2,7 @@ package txnmanager
 
 import (
 	"database/sql"
+	"errors"
 	"testing"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -154,5 +155,45 @@ func TestNestCommit(t *testing.T) {
 	}
 	if id != 2 {
 		t.Errorf("got %d\nwant 2", id)
+	}
+}
+
+func TestNestRollback(t *testing.T) {
+	db, err := setup()
+	if err != nil {
+		t.Fatalf("opening database failed: %v", err)
+	}
+	defer db.Close()
+
+	dbm := NewDbm(db)
+	err = Do(dbm, func(tx1 Dbm) error {
+		_, err := tx1.Exec("INSERT INTO t1 (id) VALUES(1)")
+		if err != nil {
+			t.Fatalf("intert failed: %v", err)
+		}
+
+		err = Do(tx1, func(tx2 Dbm) error {
+			_, err := tx2.Exec("INSERT INTO t1 (id) VALUES(2)")
+			return err
+		})
+		if err != nil {
+			t.Fatalf("insert failed: %v", err)
+		}
+
+		return errors.New("something wrong. rollback all change.")
+	})
+	if err == nil {
+		t.Fatalf("got no error\nwant fail")
+	}
+
+	row := dbm.QueryRow("SELECT id FROM t1 WHERE id = ?", 1)
+	var id int
+	if err = row.Scan(&id); err != sql.ErrNoRows {
+		t.Errorf("got %v\nwant ErrNoRows", err)
+	}
+
+	row = dbm.QueryRow("SELECT id FROM t1 WHERE id = ?", 2)
+	if err = row.Scan(&id); err != sql.ErrNoRows {
+		t.Errorf("got %v\nwant ErrNoRows", err)
 	}
 }
