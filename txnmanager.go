@@ -24,6 +24,7 @@ type dbm struct {
 type tx struct {
 	*sql.Tx
 	parent     *tx
+	root       *tx
 	childCount int
 	done       bool
 }
@@ -37,7 +38,10 @@ func (d *dbm) TxBegin() (Dbm, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &tx{Tx: t}, nil
+
+	child := &tx{Tx: t}
+	child.root = child
+	return child, nil
 }
 
 func (d *dbm) TxCommit() error {
@@ -57,12 +61,13 @@ func (t *tx) TxBegin() (Dbm, error) {
 	child := &tx{
 		Tx:     t.Tx,
 		parent: t,
+		root:   t.root,
 	}
 	return child, nil
 }
 
 func (t *tx) TxCommit() error {
-	if t.done {
+	if t.done || t.root.done {
 		return sql.ErrTxDone
 	}
 
@@ -84,15 +89,16 @@ func (t *tx) TxCommit() error {
 }
 
 func (t *tx) TxRollback() error {
-	if t.done {
+	if t.done || t.root.done {
 		return sql.ErrTxDone
 	}
 	t.done = true
+	t.root.done = true
 	return t.Rollback()
 }
 
 func (t *tx) TxFinish() error {
-	if t.done {
+	if t.done || t.root.done {
 		return nil
 	}
 	return t.TxRollback()
