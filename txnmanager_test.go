@@ -115,3 +115,44 @@ func TestDo(t *testing.T) {
 		t.Errorf("got %d\nwant 1", id)
 	}
 }
+
+func TestNestCommit(t *testing.T) {
+	db, err := setup()
+	if err != nil {
+		t.Fatalf("opening database failed: %v", err)
+	}
+	defer db.Close()
+
+	dbm := NewDbm(db)
+	err = Do(dbm, func(tx1 Dbm) error {
+		_, err := tx1.Exec("INSERT INTO t1 (id) VALUES(1)")
+		if err != nil {
+			return err
+		}
+
+		return Do(tx1, func(tx2 Dbm) error {
+			_, err := tx2.Exec("INSERT INTO t1 (id) VALUES(2)")
+			return err
+		})
+	})
+	if err != nil {
+		t.Fatalf("do failed: %v", err)
+	}
+
+	row := dbm.QueryRow("SELECT id FROM t1 WHERE id = ?", 1)
+	var id int
+	if err = row.Scan(&id); err != nil {
+		t.Fatalf("selecting row failed: %v", err)
+	}
+	if id != 1 {
+		t.Errorf("got %d\nwant 1", id)
+	}
+
+	row = dbm.QueryRow("SELECT id FROM t1 WHERE id = ?", 2)
+	if err = row.Scan(&id); err != nil {
+		t.Fatalf("selecting row failed: %v", err)
+	}
+	if id != 2 {
+		t.Errorf("got %d\nwant 2", id)
+	}
+}

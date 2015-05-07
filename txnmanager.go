@@ -25,7 +25,7 @@ type tx struct {
 	*sql.Tx
 	parent     *tx
 	childCount int
-	isDone     bool
+	done       bool
 }
 
 func NewDbm(db *sql.DB) Dbm {
@@ -62,8 +62,8 @@ func (t *tx) TxBegin() (Dbm, error) {
 }
 
 func (t *tx) TxCommit() error {
-	if t.isDone {
-		return nil
+	if t.done {
+		return sql.ErrTxDone
 	}
 
 	if t.childCount != 0 {
@@ -71,12 +71,12 @@ func (t *tx) TxCommit() error {
 		return errors.New("txmanager: child transactions are not done")
 	}
 
+	t.done = true
 	if t.parent == nil {
 		err := t.Commit()
 		if err != nil {
-			return t.TxRollback()
+			return t.Rollback()
 		}
-		t.isDone = true
 	} else {
 		t.parent.childCount--
 	}
@@ -84,15 +84,15 @@ func (t *tx) TxCommit() error {
 }
 
 func (t *tx) TxRollback() error {
-	if t.isDone {
-		return nil
+	if t.done {
+		return sql.ErrTxDone
 	}
-	t.isDone = true
+	t.done = true
 	return t.Rollback()
 }
 
 func (t *tx) TxFinish() error {
-	if t.isDone {
+	if t.done {
 		return nil
 	}
 	return t.TxRollback()
@@ -104,7 +104,6 @@ func Do(d Dbm, f func(t Dbm) error) error {
 		return err
 	}
 	defer t.TxFinish()
-
 	err = f(t)
 	if err != nil {
 		return err
