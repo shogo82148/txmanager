@@ -1,4 +1,4 @@
-package txnmanager
+package txmanager
 
 import (
 	"database/sql"
