@@ -1,9 +1,13 @@
+// The txnmanager is a nested transation manager for database/sql.
+
 package txmanager
 
 import (
 	"database/sql"
 	"errors"
 )
+
+var ErrChildrenNotDone = errors.New("txmanager: children transactions are not done")
 
 type Dbm interface {
 	// Exec executes a query without returning any rows.
@@ -96,7 +100,7 @@ func (t *tx) TxCommit() error {
 
 	if t.childCount != 0 {
 		t.TxRollback()
-		return errors.New("txmanager: child transactions are not done")
+		return ErrChildrenNotDone
 	}
 
 	t.done = true
