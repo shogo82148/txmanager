@@ -1,5 +1,8 @@
 language: go
 
+# go 1.1 have no option to get packages for test
+install: go get github.com/mattn/go-sqlite3
+
 go:
   - 1.0
   - 1.1
