@@ -9,7 +9,8 @@ import (
 
 var ErrChildrenNotDone = errors.New("txmanager: children transactions are not done")
 
-type Dbm interface {
+// an Executor executes SQL query.
+type Executor interface {
 	// Exec executes a query without returning any rows.
 	// See sql.DB and sql.Tx for more information.
 	Exec(query string, args ...interface{}) (sql.Result, error)
@@ -25,14 +26,20 @@ type Dbm interface {
 	// QueryRow executes a query that is expected to return at most one row.
 	// See sql.DB and sql.Tx for more information.
 	QueryRow(query string, args ...interface{}) *sql.Row
+}
 
+// a Beginner starts a transaction.
+type Beginner interface {
 	// TxBegin starts a transaction.
-	// If the Dbm is a transaction, TxBegin does't do BEGIN at here.
+	// If the DB is a transaction, TxBegin does't do BEGIN at here.
 	// It just pushed transaction stack and do nothing.
-	TxBegin() (Dbm, error)
+	TxBegin() (Tx, error)
+}
 
+// a Committer finishes a transaction
+type Committer interface {
 	// TxCommit commits the transaction.
-	// If the Dbm is in a nested transaction, TxCommit doesn't do COMMIT at here.
+	// If the DB is in a nested transaction, TxCommit doesn't do COMMIT at here.
 	// It just poped transaction stack and do nothing.
 	TxCommit() error
 
@@ -42,14 +49,29 @@ type Dbm interface {
 
 	// TxFinish aborts the transaction if it is not commited.
 	TxFinish() error
+}
 
+// an EndHookAdder adds end hooks
+type EndHookAdder interface {
 	// TxAddEndHook add a hook function to txmanager.
 	// Hooks are executed only all transactions are executed successfully.
 	// If some transactions are failed, they aren't executed.
 	TxAddEndHook(hook func() error) error
 }
 
-type dbm struct {
+type DB interface {
+	Executor
+	Beginner
+}
+
+type Tx interface {
+	Executor
+	Beginner
+	Committer
+	EndHookAdder
+}
+
+type db struct {
 	*sql.DB
 }
 
@@ -62,11 +84,11 @@ type tx struct {
 	hooks      []func() error
 }
 
-func NewDbm(db *sql.DB) Dbm {
-	return &dbm{db}
+func NewDB(d *sql.DB) DB {
+	return &db{d}
 }
 
-func (d *dbm) TxBegin() (Dbm, error) {
+func (d *db) TxBegin() (Tx, error) {
 	t, err := d.Begin()
 	if err != nil {
 		return nil, err
@@ -77,23 +99,7 @@ func (d *dbm) TxBegin() (Dbm, error) {
 	return child, nil
 }
 
-func (d *dbm) TxCommit() error {
-	return sql.ErrTxDone
-}
-
-func (d *dbm) TxRollback() error {
-	return sql.ErrTxDone
-}
-
-func (d *dbm) TxFinish() error {
-	return nil
-}
-
-func (d *dbm) TxAddEndHook(hook func() error) error {
-	return sql.ErrTxDone
-}
-
-func (t *tx) TxBegin() (Dbm, error) {
+func (t *tx) TxBegin() (Tx, error) {
 	t.childCount++
 	child := &tx{
 		Tx:     t.Tx,
@@ -166,7 +172,7 @@ func (t *tx) TxAddEndHook(hook func() error) error {
 }
 
 // Do executes the function in a transaction.
-func Do(d Dbm, f func(t Dbm) error) error {
+func Do(d DB, f func(t Tx) error) error {
 	t, err := d.TxBegin()
 	if err != nil {
 		return err

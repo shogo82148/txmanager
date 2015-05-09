@@ -16,7 +16,7 @@ import (
 )
 
 func Example(db *sql.DB) {
-	dbm := txmanager.NewDbm(db)
+	dbm := txmanager.NewDB(db)
 
 	// start a transaction
 	tx, _ := dbm.TxBegin()
@@ -31,7 +31,7 @@ func Example(db *sql.DB) {
 }
 ```
 
-You can manage `txmanager.Dbm` with `txmanager.Do`.
+You can manage `txmanager.DB` with `txmanager.Do`.
 
 ``` go
 import (
@@ -41,8 +41,8 @@ import (
 )
 
 func Example(db *sql.DB) {
-	dbm := txmanager.NewDbm(db)
-	txmanager.Do(dbm, func(tx txmanager.Dbm) error {
+	dbm := txmanager.NewDB(db)
+	txmanager.Do(dbm, func(tx txmanager.Tx) error {
 		// Exec INSERT in a transaction
 		_, err := tx.Exec("INSERT INTO t1 (id) VALUES(1)")
 		return err
@@ -59,19 +59,19 @@ import (
 	"githun.com/shogo82148/txmanager"
 )
 
-func Foo(dbm *txmanager.Dbm) error {
-	return txmanager.Do(dbm, func(tx Dbm) error {
+func Foo(dbm *txmanager.DB) error {
+	return txmanager.Do(dbm, func(tx txmanager.Tx) error {
 		_, err := tx.Exec("INSERT INTO t1 (id) VALUES(1)")
 		return err
 	})
 }
 
 func Example(db *sql.DB) {
-	dbm := txmanager.NewDbm(db)
+	dbm := txmanager.NewDB(db)
 
 	Foo(dbm)
 
-	txmanager.Do(dbm, func(tx Dbm) error {
+	txmanager.Do(dbm, func(tx txmanager.Tx) error {
 		return Foo(tx)
 	})
 }
@@ -84,8 +84,8 @@ func Example(db *sql.DB) {
 So following code sometimes outputs wrong log.
 
 ``` go
-func Foo(dbm *txmanager.Dbm) error {
-	err := txmanager.Do(dbm, func(tx Dbm) error {
+func Foo(dbm *txmanager.DB) error {
+	err := txmanager.Do(dbm, func(tx txmanager.Tx) error {
 		_, err := tx.Exec("INSERT INTO t1 (id) VALUES(1)"); err != nil {
 		return err
 	})
@@ -103,8 +103,8 @@ Use `TxAddEndHook` to avoid it.
 It is inspired by [DBIx::TransactionManager::EndHook](https://github.com/soh335/DBIx-TransactionManager-EndHook).
 
 ``` go
-func Foo(dbm *txmanager.Dbm) error {
-	return txmanager.Do(dbm, func(tx Dbm) error {
+func Foo(dbm *txmanager.DB) error {
+	return txmanager.Do(dbm, func(tx txmanager.Tx) error {
 		if _, err := tx.Exec("INSERT INTO t1 (id) VALUES(1)"); err != nil {
 			return err
 		}

@@ -31,7 +31,7 @@ func TestCommit(t *testing.T) {
 	}
 	defer db.Close()
 
-	dbm := NewDbm(db)
+	dbm := NewDB(db)
 	func() {
 		tx, err := dbm.TxBegin()
 		if err != nil {
@@ -66,7 +66,7 @@ func TestRollback(t *testing.T) {
 	}
 	defer db.Close()
 
-	dbm := NewDbm(db)
+	dbm := NewDB(db)
 	func() {
 		tx, err := dbm.TxBegin()
 		if err != nil {
@@ -98,8 +98,8 @@ func TestDo(t *testing.T) {
 	}
 	defer db.Close()
 
-	dbm := NewDbm(db)
-	err = Do(dbm, func(tx Dbm) error {
+	dbm := NewDB(db)
+	err = Do(dbm, func(tx Tx) error {
 		_, err := tx.Exec("INSERT INTO t1 (id) VALUES(1)")
 		return err
 	})
@@ -124,14 +124,14 @@ func TestNestCommit(t *testing.T) {
 	}
 	defer db.Close()
 
-	dbm := NewDbm(db)
-	err = Do(dbm, func(tx1 Dbm) error {
+	dbm := NewDB(db)
+	err = Do(dbm, func(tx1 Tx) error {
 		_, err := tx1.Exec("INSERT INTO t1 (id) VALUES(1)")
 		if err != nil {
 			return err
 		}
 
-		return Do(tx1, func(tx2 Dbm) error {
+		return Do(tx1, func(tx2 Tx) error {
 			_, err := tx2.Exec("INSERT INTO t1 (id) VALUES(2)")
 			return err
 		})
@@ -165,14 +165,14 @@ func TestNestRollback(t *testing.T) {
 	}
 	defer db.Close()
 
-	dbm := NewDbm(db)
-	err = Do(dbm, func(tx1 Dbm) error {
+	dbm := NewDB(db)
+	err = Do(dbm, func(tx1 Tx) error {
 		_, err := tx1.Exec("INSERT INTO t1 (id) VALUES(1)")
 		if err != nil {
 			t.Fatalf("intert failed: %v", err)
 		}
 
-		err = Do(tx1, func(tx2 Dbm) error {
+		err = Do(tx1, func(tx2 Tx) error {
 			_, err := tx2.Exec("INSERT INTO t1 (id) VALUES(2)")
 			return err
 		})
@@ -205,11 +205,11 @@ func TestTxEndHook(t *testing.T) {
 	}
 	defer db.Close()
 
-	dbm := NewDbm(db)
+	dbm := NewDB(db)
 	isTx1Commited := false
 	isTx2Commited := false
-	err = Do(dbm, func(tx1 Dbm) error {
-		Do(tx1, func(tx2 Dbm) error {
+	err = Do(dbm, func(tx1 Tx) error {
+		Do(tx1, func(tx2 Tx) error {
 			_, err := tx2.Exec("INSERT INTO t1 (id) VALUES(2)")
 			tx2.TxAddEndHook(func() error {
 				isTx2Commited = true
@@ -254,9 +254,9 @@ func TestTxEndHookRollback(t *testing.T) {
 	}
 	defer db.Close()
 
-	dbm := NewDbm(db)
-	err = Do(dbm, func(tx1 Dbm) error {
-		Do(tx1, func(tx2 Dbm) error {
+	dbm := NewDB(db)
+	err = Do(dbm, func(tx1 Tx) error {
+		Do(tx1, func(tx2 Tx) error {
 			_, err := tx2.Exec("INSERT INTO t1 (id) VALUES(2)")
 			tx2.TxAddEndHook(func() error {
 				t.Error("tx2 hook is called.\nwant not to call")
@@ -281,9 +281,9 @@ func TestTxEndHookError(t *testing.T) {
 	}
 	defer db.Close()
 
-	dbm := NewDbm(db)
-	err = Do(dbm, func(tx1 Dbm) error {
-		Do(tx1, func(tx2 Dbm) error {
+	dbm := NewDB(db)
+	err = Do(dbm, func(tx1 Tx) error {
+		Do(tx1, func(tx2 Tx) error {
 			tx2.Exec("INSERT INTO t1 (id) VALUES(2)")
 			tx2.TxAddEndHook(func() error {
 				return errors.New("something wrong. rollback all change.")
