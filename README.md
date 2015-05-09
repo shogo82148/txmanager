@@ -78,6 +78,45 @@ func Example(db *sql.DB) {
 
 ```
 
+## END HOOK
+
+`TxCommit` necessarily does not do COMMIT SQL statemant.
+So following code sometimes outputs wrong log.
+
+``` go
+func Foo(dbm *txmanager.Dbm) error {
+	err := txmanager.Do(dbm, func(tx Dbm) error {
+		_, err := tx.Exec("INSERT INTO t1 (id) VALUES(1)"); err != nil {
+		return err
+	})
+	if err != nil {
+		return err
+	}
+
+	// TxCommit is success, while the transaction might fail
+	log.Println("COMMIT is success!!!")
+	return nil
+}
+```
+
+Use `TxAddEndHook` to avoid it.
+It is inspired by [DBIx::TransactionManager::EndHook](https://github.com/soh335/DBIx-TransactionManager-EndHook).
+
+``` go
+func Foo(dbm *txmanager.Dbm) error {
+	return txmanager.Do(dbm, func(tx Dbm) error {
+		if _, err := tx.Exec("INSERT INTO t1 (id) VALUES(1)"); err != nil {
+			return err
+		}
+		tx.TxAddEndHook(func() error {
+			// It is called if all transactions are executed successfully.
+			log.Println("COMMIT is success!!!")
+		})
+		return nil
+	})
+}
+```
+
 ## godoc
 
 See [godoc](https://godoc.org/github.com/shogo82148/txnmanager) for more imformation.

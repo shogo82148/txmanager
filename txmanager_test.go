@@ -197,3 +197,105 @@ func TestNestRollback(t *testing.T) {
 		t.Errorf("got %v\nwant ErrNoRows", err)
 	}
 }
+
+func TestTxEndHook(t *testing.T) {
+	db, err := setup()
+	if err != nil {
+		t.Fatalf("opening database failed: %v", err)
+	}
+	defer db.Close()
+
+	dbm := NewDbm(db)
+	isTx1Commited := false
+	isTx2Commited := false
+	err = Do(dbm, func(tx1 Dbm) error {
+		Do(tx1, func(tx2 Dbm) error {
+			_, err := tx2.Exec("INSERT INTO t1 (id) VALUES(2)")
+			tx2.TxAddEndHook(func() error {
+				isTx2Commited = true
+				return nil
+			})
+			return err
+		})
+
+		if isTx2Commited {
+			t.Error("got Tx2 commited\nwant Tx2 not commited")
+		}
+
+		tx1.TxAddEndHook(func() error {
+			if !isTx2Commited {
+				t.Error("got Tx2 not commited\nwant Tx2 commited")
+			}
+
+			isTx1Commited = true
+			return nil
+		})
+
+		return nil
+	})
+
+	if !isTx2Commited {
+		t.Error("got Tx2 not commited\nwant Tx2 commited")
+	}
+
+	if !isTx1Commited {
+		t.Error("got Tx1 not commited\nwant Tx1 commited")
+	}
+
+	if err != nil {
+		t.Fatalf("do failed: %v", err)
+	}
+}
+
+func TestTxEndHookRollback(t *testing.T) {
+	db, err := setup()
+	if err != nil {
+		t.Fatalf("opening database failed: %v", err)
+	}
+	defer db.Close()
+
+	dbm := NewDbm(db)
+	err = Do(dbm, func(tx1 Dbm) error {
+		Do(tx1, func(tx2 Dbm) error {
+			_, err := tx2.Exec("INSERT INTO t1 (id) VALUES(2)")
+			tx2.TxAddEndHook(func() error {
+				t.Error("tx2 hook is called.\nwant not to call")
+				return nil
+			})
+			return err
+		})
+
+		tx1.TxAddEndHook(func() error {
+			t.Error("tx1 hook is called.\nwant not to call")
+			return nil
+		})
+
+		return errors.New("something wrong. rollback all change.")
+	})
+}
+
+func TestTxEndHookError(t *testing.T) {
+	db, err := setup()
+	if err != nil {
+		t.Fatalf("opening database failed: %v", err)
+	}
+	defer db.Close()
+
+	dbm := NewDbm(db)
+	err = Do(dbm, func(tx1 Dbm) error {
+		Do(tx1, func(tx2 Dbm) error {
+			tx2.Exec("INSERT INTO t1 (id) VALUES(2)")
+			tx2.TxAddEndHook(func() error {
+				return errors.New("something wrong. rollback all change.")
+			})
+			return err
+		})
+
+		tx1.TxAddEndHook(func() error {
+			t.Error("tx1 hook is called.\nwant not to call")
+			return nil
+		})
+
+		return nil
+	})
+}

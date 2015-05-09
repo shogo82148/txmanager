@@ -42,6 +42,11 @@ type Dbm interface {
 
 	// TxFinish aborts the transaction if it is not commited.
 	TxFinish() error
+
+	// TxAddEndHook add a hook function to txmanager.
+	// Hooks are executed only all transactions are executed successfully.
+	// If some transactions are failed, they aren't executed.
+	TxAddEndHook(hook func() error) error
 }
 
 type dbm struct {
@@ -54,6 +59,7 @@ type tx struct {
 	root       *tx
 	childCount int
 	done       bool
+	hooks      []func() error
 }
 
 func NewDbm(db *sql.DB) Dbm {
@@ -83,6 +89,10 @@ func (d *dbm) TxFinish() error {
 	return nil
 }
 
+func (d *dbm) TxAddEndHook(hook func() error) error {
+	return sql.ErrTxDone
+}
+
 func (t *tx) TxBegin() (Dbm, error) {
 	t.childCount++
 	child := &tx{
@@ -104,14 +114,30 @@ func (t *tx) TxCommit() error {
 	}
 
 	t.done = true
-	if t.parent == nil {
-		err := t.Commit()
-		if err != nil {
-			return t.Rollback()
-		}
-	} else {
+	if t.parent != nil {
+		// t is a nested transaction.
+		// just pop transaction stack
 		t.parent.childCount--
+
+		// ... and do nothing
+		return nil
 	}
+
+	// Do COMMIT
+	err := t.Commit()
+	if err != nil {
+		return t.Rollback()
+	}
+
+	// call end hooks
+	if t.hooks != nil {
+		for _, h := range t.hooks {
+			if err := h(); err != nil {
+				return err
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -129,6 +155,14 @@ func (t *tx) TxFinish() error {
 		return nil
 	}
 	return t.TxRollback()
+}
+
+func (t *tx) TxAddEndHook(hook func() error) error {
+	if t.done || t.root.done {
+		return sql.ErrTxDone
+	}
+	t.root.hooks = append(t.root.hooks, hook)
+	return nil
 }
 
 // Do executes the function in a transaction.
