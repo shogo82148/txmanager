@@ -117,6 +117,38 @@ func TestDo(t *testing.T) {
 	}
 }
 
+func TestDoPanic(t *testing.T) {
+	db, err := setup()
+	if err != nil {
+		t.Fatalf("opening database failed: %v", err)
+	}
+	defer db.Close()
+
+	dbm := NewDB(db)
+	myerror := "something wrong!!!!"
+	func() {
+		defer func() {
+			if err := recover(); err != nil && err != myerror {
+				t.Error("unexpected panic:", err)
+			}
+		}()
+		Do(dbm, func(tx Tx) error {
+			_, err := tx.Exec("INSERT INTO t1 (id) VALUES(1)")
+			if err != nil {
+				return err
+			}
+			panic(myerror)
+			return nil
+		})
+	}()
+
+	row := dbm.QueryRow("SELECT id FROM t1 WHERE id = ?", 1)
+	var id int
+	if err = row.Scan(&id); err != sql.ErrNoRows {
+		t.Errorf("got %v\nwant ErrNoRows", err)
+	}
+}
+
 func TestNestCommit(t *testing.T) {
 	db, err := setup()
 	if err != nil {
