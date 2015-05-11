@@ -1,4 +1,5 @@
 // The txnmanager is a nested transation manager for database/sql.
+// This software is released under the MIT License, see https://github.com/shogo82148/txmanager/blob/master/LICENSE.txt .
 
 package txmanager
 

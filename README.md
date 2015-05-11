@@ -117,6 +117,10 @@ func Foo(dbm *txmanager.DB) error {
 }
 ```
 
+## LICENSE
+
+This software is released under the MIT License, see LICENSE.txt.
+
 ## godoc
 
 See [godoc](https://godoc.org/github.com/shogo82148/txnmanager) for more imformation.
