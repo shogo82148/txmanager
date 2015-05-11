@@ -12,7 +12,7 @@ Use `TxBegin` to start a transaction, and `TxCommit` or `TxRollback` to finish t
 import (
 	"database/sql"
 
-	"githun.com/shogo82148/txmanager"
+	"github.com/shogo82148/txmanager"
 )
 
 func Example(db *sql.DB) {
@@ -37,7 +37,7 @@ You can manage `txmanager.DB` with `txmanager.Do`.
 import (
 	"database/sql"
 
-	"githun.com/shogo82148/txmanager"
+	"github.com/shogo82148/txmanager"
 )
 
 func Example(db *sql.DB) {
@@ -56,7 +56,7 @@ func Example(db *sql.DB) {
 import (
 	"database/sql"
 
-	"githun.com/shogo82148/txmanager"
+	"github.com/shogo82148/txmanager"
 )
 
 func Foo(dbm *txmanager.DB) error {
