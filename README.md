@@ -123,4 +123,4 @@ This software is released under the MIT License, see LICENSE.txt.
 
 ## godoc
 
-See [godoc](https://godoc.org/github.com/shogo82148/txnmanager) for more imformation.
+See [godoc](https://godoc.org/github.com/shogo82148/txmanager) for more imformation.
