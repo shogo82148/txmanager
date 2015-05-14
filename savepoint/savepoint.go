@@ -70,7 +70,11 @@ func (t *tx) TxCommit() error {
 		t.parent.childCount--
 
 		_, err := t.Exec("RELEASE SAVEPOINT " + t.name)
-		return err
+		if err != nil {
+			return err
+		}
+		t.parent.hooks = append(t.parent.hooks, t.hooks...)
+		return nil
 	}
 
 	// Do COMMIT
@@ -118,6 +122,6 @@ func (t *tx) TxAddEndHook(hook func() error) error {
 	if t.done || t.root.done {
 		return sql.ErrTxDone
 	}
-	t.root.hooks = append(t.root.hooks, hook)
+	t.hooks = append(t.hooks, hook)
 	return nil
 }
