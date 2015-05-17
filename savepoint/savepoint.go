@@ -22,6 +22,9 @@ type tx struct {
 	hooks      []func() error
 }
 
+// NewDB creates new transaction manager which suppurts partial rollback.
+// TxBegin does SAVEPOINT, TxCommit does RELEASE SAVEPOINT,
+// and TxRollback does ROLLBACK TO SAVEPOINT in a transaction.
 func NewDB(d *sql.DB) txmanager.DB {
 	return &db{d}
 }
