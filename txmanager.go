@@ -1,6 +1,5 @@
 // The txnmanager is a nested transation manager for database/sql.
 // This software is released under the MIT License, see https://github.com/shogo82148/txmanager/blob/master/LICENSE.txt .
-
 package txmanager
 
 import (
@@ -32,20 +31,21 @@ type Executor interface {
 // a Beginner starts a transaction.
 type Beginner interface {
 	// TxBegin starts a transaction.
-	// If the DB is a transaction, TxBegin does't do BEGIN at here.
-	// It just pushed transaction stack and do nothing.
+	// If the DB is not a transaction, TxBegin does BEGIN at here.
+	// Otherwise, its behavior is implementation-dependent.
 	TxBegin() (Tx, error)
 }
 
 // a Committer finishes a transaction
 type Committer interface {
 	// TxCommit commits the transaction.
-	// If the DB is in a nested transaction, TxCommit doesn't do COMMIT at here.
-	// It just poped transaction stack and do nothing.
+	// If the DB is in a root transaction, TxCommit does COMMIT at here.
+	// Otherwise, its behavior is implementation-dependent.
 	TxCommit() error
 
 	// TxRollback aborts the transaction.
-	// TxRollback always does ROLLBACK at here.
+	// If the DB is in a root transaction, TxRollback does ROLLBACK at here.
+	// Otherwise, its behavior is implementation-dependent.
 	TxRollback() error
 
 	// TxFinish aborts the transaction if it is not commited.
@@ -85,6 +85,10 @@ type tx struct {
 	hooks      []func() error
 }
 
+// NewDB creates a basic transaction manager.
+// TxBegin/TxCommit doesn't do BEGIN/COMMIT in a transaction.
+// They just push/pop transaction stack and do nothing.
+// TxRollback always does ROLLBACK and finish all related transactions includes parents.
 func NewDB(d *sql.DB) DB {
 	return &db{d}
 }
