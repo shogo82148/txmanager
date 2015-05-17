@@ -1,3 +1,4 @@
+// The savepoint is a nested transation manager which suppurts partial rollback.
 package savepoint
 
 import (
@@ -22,6 +23,9 @@ type tx struct {
 	hooks      []func() error
 }
 
+// NewDB creates new transaction manager which suppurts partial rollback.
+// TxBegin does SAVEPOINT, and TxCommit does RELEASE SAVEPOINT in a transaction.
+// TxRollback does ROLLBACK TO SAVEPOINT and finish transactions excludes parents.
 func NewDB(d *sql.DB) txmanager.DB {
 	return &db{d}
 }
